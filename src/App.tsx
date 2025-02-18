@@ -83,7 +83,7 @@ export default function App() {
     <div className={`min-h-screen p-4 ${darkMode ? "bg-black text-white" : "bg-white text-black"}`}>
       <div className="max-w-md mx-auto">
         <div className="flex flex-col justify-between items-center mb-8">
-          <img src="/public/logo.png" alt="Logo" className="w-auto h-10" />
+          <img src="/logo.png" alt="Logo" className="w-auto h-10" />
         </div>
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-xl font-bold">Lista de Compras 🛒</h1>
