@@ -18,7 +18,7 @@ export default function App() {
   const [darkMode, setDarkMode] = useState<boolean>(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Carregar itens e estado do darkMode do localStorage
+  // Carrega a lista e o estado do darkMode do localStorage
   useEffect(() => {
     const storedItems = localStorage.getItem("shoppingList");
     if (storedItems) {
@@ -34,13 +34,14 @@ export default function App() {
     }
   }, []);
 
-  // Salvar itens e darkMode no localStorage
+  // Salva os itens no localStorage sempre que houver alterações
   useEffect(() => {
     if (items.length > 0) {
       localStorage.setItem("shoppingList", JSON.stringify(items));
     }
   }, [items]);
 
+  // Salva o estado do darkMode no localStorage
   useEffect(() => {
     localStorage.setItem("darkMode", darkMode.toString());
   }, [darkMode]);
@@ -60,6 +61,7 @@ export default function App() {
       };
       setItems((prevItems) => [...prevItems, newItem]);
       setInputValue("");
+
       if (inputRef.current) {
         inputRef.current.focus();
       }
@@ -90,50 +92,59 @@ export default function App() {
     localStorage.removeItem("shoppingList");
   };
 
-  // Função para capturar a tela inteira e compartilhar a imagem
+  // Função para capturar toda a tela e compartilhar a imagem
   const handleShare = async () => {
-    // Capturamos todo o app – certifique-se de que o container de nível superior tenha um id específico, ex: "app-container"
+    // Certifique-se de que o container principal tenha o id "app-container"
     const element = document.getElementById("app-container");
     if (!element) return;
 
     try {
-      // Geramos a imagem com html2canvas
+      // Captura toda a tela com html2canvas
       const canvas = await html2canvas(element);
-      // Aqui transformamos o canvas em base64 e em seguida convertemos para blob para criar um File
-      const imageBase64 = canvas.toDataURL("image/png");
-      const res = await fetch(imageBase64);
-      const blob = await res.blob();
-      const file = new File([blob], "screenshot.png", { type: "image/png" });
+      // Converte o canvas para blob utilizando canvas.toBlob()
+      canvas.toBlob(async (blob) => {
+        if (!blob) {
+          console.error("Erro ao gerar o blob da imagem.");
+          return;
+        }
 
-      // Verifica se o navegador suporta compartilhar arquivos
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({
-          files: [file],
-          title: "Meu App",
-          text: "Confira a tela do meu aplicativo!",
-        });
-      } else {
-        // Fallback: caso o compartilhamento de arquivos não seja suportado,
-        // podemos acionar um download da imagem para que o usuário a compartilhe manualmente.
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = "screenshot.png";
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        alert(
-          "Compartilhamento nativo não disponível. A imagem foi baixada para que você possa compartilhar manualmente."
-        );
-      }
+        // Cria um objeto File a partir do blob
+        const file = new File([blob], "screenshot.png", { type: "image/png" });
+        console.log("Arquivo criado:", file);
+
+        // Verifica se o navegador suporta a Web Share API com arquivos
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          try {
+            await navigator.share({
+              files: [file],
+              title: "Meu App",
+              text: "Confira a tela do meu aplicativo!",
+            });
+          } catch (error) {
+            console.error("Erro ao compartilhar a imagem:", error);
+          }
+        } else {
+          // Fallback: se o compartilhamento nativo não for suportado, aciona o download da imagem
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = "screenshot.png";
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+          alert(
+            "Compartilhamento nativo não disponível. A imagem foi baixada para compartilhamento manual."
+          );
+        }
+      }, "image/png");
     } catch (error) {
       console.error("Erro ao capturar a tela:", error);
     }
   };
 
   return (
-    // O id "app-container" garante que toda a interface será capturada
+    // O id "app-container" garante que toda a interface seja capturada
     <div
       id="app-container"
       className={`min-h-screen p-4 ${
