@@ -3,48 +3,55 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent } from "@/components/ui/card";
-import { Trash2, Sun, Moon, Share } from "lucide-react";
+import { Trash2, Sun, Moon, Share, Loader2 } from "lucide-react";
 import html2canvas from "html2canvas";
-
-interface Item {
-  id: number;
-  text: string;
-  checked: boolean;
-}
+import { ShoppingItem } from "@/lib/supabase";
+import {
+  getAllItems,
+  addItem as addItemToDb,
+  deleteItem as deleteItemFromDb,
+  clearAllItems,
+  toggleItemChecked,
+} from "@/lib/shoppingService";
+import { VoiceButton } from "@/components/VoiceButton";
+import { processVoiceToItems, isOpenAIConfigured } from "@/lib/openaiService";
 
 export default function App() {
-  const [items, setItems] = useState<Item[]>([]);
+  const [items, setItems] = useState<ShoppingItem[]>([]);
   const [inputValue, setInputValue] = useState<string>("");
   const [darkMode, setDarkMode] = useState<boolean>(false);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [processingVoice, setProcessingVoice] = useState<boolean>(false);
+  const [voiceError, setVoiceError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Carrega a lista e o estado do darkMode do localStorage
+  // Carrega os itens do Supabase e o darkMode do localStorage
   useEffect(() => {
-    const storedItems = localStorage.getItem("shoppingList");
-    if (storedItems) {
-      try {
-        setItems(JSON.parse(storedItems));
-      } catch (error) {
-        console.error("Erro ao carregar os itens do localStorage:", error);
-      }
-    }
+    loadItems();
+
     const storedDarkMode = localStorage.getItem("darkMode");
     if (storedDarkMode !== null) {
       setDarkMode(storedDarkMode === "true");
     }
   }, []);
 
-  // Salva os itens no localStorage sempre que houver alterações
-  useEffect(() => {
-    if (items.length > 0) {
-      localStorage.setItem("shoppingList", JSON.stringify(items));
-    }
-  }, [items]);
-
   // Salva o estado do darkMode no localStorage
   useEffect(() => {
     localStorage.setItem("darkMode", darkMode.toString());
   }, [darkMode]);
+
+  // Função para carregar itens do Supabase
+  const loadItems = async () => {
+    try {
+      setLoading(true);
+      const data = await getAllItems();
+      setItems(data);
+    } catch (error) {
+      console.error("Erro ao carregar itens:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const capitalizeWords = (text: string) =>
     text
@@ -52,18 +59,21 @@ export default function App() {
       .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
       .join(" ");
 
-  const addItem = () => {
+  const addItem = async () => {
     if (inputValue.trim() !== "") {
-      const newItem = {
-        id: Date.now(),
-        text: capitalizeWords(inputValue),
-        checked: false,
-      };
-      setItems((prevItems) => [...prevItems, newItem]);
-      setInputValue("");
+      try {
+        const newItem = await addItemToDb({
+          text: capitalizeWords(inputValue),
+          checked: false,
+        });
+        setItems((prevItems) => [...prevItems, newItem]);
+        setInputValue("");
 
-      if (inputRef.current) {
-        inputRef.current.focus();
+        if (inputRef.current) {
+          inputRef.current.focus();
+        }
+      } catch (error) {
+        console.error("Erro ao adicionar item:", error);
       }
     }
   };
@@ -75,21 +85,83 @@ export default function App() {
     }
   };
 
-  const toggleChecked = (id: number) => {
-    setItems((prevItems) =>
-      prevItems.map((item) =>
-        item.id === id ? { ...item, checked: !item.checked } : item
-      )
-    );
+  const handleVoiceRecording = async (audioBlob: Blob) => {
+    if (!isOpenAIConfigured()) {
+      setVoiceError(
+        "OpenAI não está configurada. Adicione a chave VITE_OPENAI_API_KEY no arquivo .env.local"
+      );
+      setTimeout(() => setVoiceError(null), 5000);
+      return;
+    }
+
+    try {
+      setProcessingVoice(true);
+      setVoiceError(null);
+
+      const result = await processVoiceToItems(audioBlob);
+
+      if (result.items.length === 0) {
+        setVoiceError("Nenhum item foi identificado. Tente novamente.");
+        setTimeout(() => setVoiceError(null), 5000);
+        return;
+      }
+
+      // Adiciona cada item à lista
+      for (const itemText of result.items) {
+        const newItem = await addItemToDb({
+          text: itemText,
+          checked: false,
+        });
+        setItems((prevItems) => [...prevItems, newItem]);
+      }
+
+      // Mostra feedback de sucesso
+      console.log(
+        `✅ ${result.items.length} item(ns) adicionado(s):`,
+        result.items
+      );
+      console.log("📝 Transcrição:", result.transcription);
+    } catch (error) {
+      console.error("Erro ao processar voz:", error);
+      setVoiceError(
+        error instanceof Error ? error.message : "Erro ao processar áudio"
+      );
+      setTimeout(() => setVoiceError(null), 5000);
+    } finally {
+      setProcessingVoice(false);
+    }
   };
 
-  const deleteItem = (id: number) => {
-    setItems((prevItems) => prevItems.filter((item) => item.id !== id));
+  const toggleChecked = async (id: string) => {
+    try {
+      const item = items.find((item) => item.id === id);
+      if (!item) return;
+
+      const updatedItem = await toggleItemChecked(id, item.checked);
+      setItems((prevItems) =>
+        prevItems.map((item) => (item.id === id ? updatedItem : item))
+      );
+    } catch (error) {
+      console.error("Erro ao atualizar item:", error);
+    }
   };
 
-  const clearList = () => {
-    setItems([]);
-    localStorage.removeItem("shoppingList");
+  const deleteItem = async (id: string) => {
+    try {
+      await deleteItemFromDb(id);
+      setItems((prevItems) => prevItems.filter((item) => item.id !== id));
+    } catch (error) {
+      console.error("Erro ao deletar item:", error);
+    }
+  };
+
+  const clearList = async () => {
+    try {
+      await clearAllItems();
+      setItems([]);
+    } catch (error) {
+      console.error("Erro ao limpar lista:", error);
+    }
   };
 
   // Função para capturar toda a tela e compartilhar a imagem
@@ -182,17 +254,43 @@ export default function App() {
               darkMode ? "border-gray-700" : "border-gray-300 text-black"
             }`}
           />
+          <VoiceButton
+            onAudioRecorded={handleVoiceRecording}
+            darkMode={darkMode}
+            disabled={processingVoice}
+          />
           <Button onClick={addItem} className="bg-green-500 hover:bg-green-600">
             Adicionar
           </Button>
         </div>
+
+        {/* Feedback de processamento de voz */}
+        {processingVoice && (
+          <div
+            className={`flex items-center gap-2 mb-4 p-3 rounded-lg ${
+              darkMode ? "bg-gray-800 text-white" : "bg-gray-100 text-gray-800"
+            }`}
+          >
+            <Loader2 className="w-4 h-4 animate-spin" />
+            <span className="text-sm">Processando áudio...</span>
+          </div>
+        )}
+
+        {/* Mensagem de erro de voz */}
+        {voiceError && (
+          <div className="mb-4 p-3 rounded-lg bg-red-500 text-white text-sm">
+            {voiceError}
+          </div>
+        )}
         <Card
           className={
             darkMode ? "bg-black border-gray-700" : "bg-white border-gray-300"
           }
         >
           <CardContent className="p-4">
-            {items.length === 0 ? (
+            {loading ? (
+              <p className="text-gray-500">Carregando...</p>
+            ) : items.length === 0 ? (
               <p className="text-gray-500">Nenhum Item Na Lista.</p>
             ) : (
               <ul className="space-y-2">
