@@ -108,6 +108,7 @@ export default function App() {
       setProcessingVoice(true);
       setVoiceError(null);
 
+      console.log("Processando áudio de", audioBlob.size, "bytes");
       const result = await processVoiceToItems(audioBlob);
 
       if (result.items.length === 0) {
@@ -133,9 +134,14 @@ export default function App() {
       console.log("📝 Transcrição:", result.transcription);
     } catch (error) {
       console.error("Erro ao processar voz:", error);
-      setVoiceError(
-        error instanceof Error ? error.message : "Erro ao processar áudio"
-      );
+
+      // Extrai mensagem de erro mais específica
+      let errorMessage = "Erro ao processar áudio";
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      }
+
+      setVoiceError(errorMessage);
       setTimeout(() => setVoiceError(null), 5000);
     } finally {
       setProcessingVoice(false);

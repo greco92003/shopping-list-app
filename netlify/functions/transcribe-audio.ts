@@ -47,10 +47,38 @@ export const handler: Handler = async (
     // Converte base64 para buffer
     const audioBuffer = Buffer.from(audioData, "base64");
 
+    // Valida tamanho mínimo do áudio (10KB)
+    const MIN_AUDIO_SIZE = 10 * 1024; // 10KB
+    if (audioBuffer.length < MIN_AUDIO_SIZE) {
+      console.log("Áudio muito pequeno:", audioBuffer.length, "bytes");
+      return {
+        statusCode: 400,
+        headers: {
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Headers": "Content-Type",
+        },
+        body: JSON.stringify({
+          error: "Áudio muito curto. Grave por pelo menos 1 segundo.",
+        }),
+      };
+    }
+
     // Usa toFile para criar um objeto File compatível com a OpenAI SDK
     console.log("Preparando áudio...");
     console.log("Tamanho do áudio:", audioBuffer.length, "bytes");
-    const audioFile = await toFile(audioBuffer, "audio.webm", {
+    console.log("Tipo MIME:", mimeType || "audio/webm");
+
+    // Determina a extensão do arquivo baseado no mimeType
+    let fileExtension = "webm";
+    if (mimeType) {
+      if (mimeType.includes("mp4")) fileExtension = "mp4";
+      else if (mimeType.includes("wav")) fileExtension = "wav";
+      else if (mimeType.includes("ogg")) fileExtension = "ogg";
+      else if (mimeType.includes("mp3")) fileExtension = "mp3";
+    }
+
+    const audioFile = await toFile(audioBuffer, `audio.${fileExtension}`, {
       type: mimeType || "audio/webm",
     });
 
@@ -60,6 +88,8 @@ export const handler: Handler = async (
       file: audioFile,
       model: "whisper-1",
       language: "pt",
+      prompt:
+        "Lista de compras: arroz, feijão, maçã, banana, leite, pão, tomate, cebola, alho, batata, carne, frango, peixe, queijo, manteiga, café, açúcar, sal, óleo, azeite",
     });
 
     console.log("Transcrição:", transcription.text);
@@ -115,6 +145,27 @@ Maçã`,
       .filter((item) => item.length > 0);
 
     console.log("Itens extraídos:", items);
+
+    // Se não houver itens, retorna erro específico
+    if (items.length === 0) {
+      console.log(
+        "Nenhum item identificado na transcrição:",
+        transcription.text
+      );
+      return {
+        statusCode: 400,
+        headers: {
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Headers": "Content-Type",
+        },
+        body: JSON.stringify({
+          error:
+            "Nenhum item de compra foi identificado. Tente falar mais claramente.",
+          transcription: transcription.text,
+        }),
+      };
+    }
 
     // Retorna o resultado
     const result: TranscribeResponse = {
