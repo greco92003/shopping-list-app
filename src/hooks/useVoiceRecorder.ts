@@ -41,7 +41,6 @@ export function useVoiceRecorder(): UseVoiceRecorderReturn {
       // Detecta o melhor formato de áudio suportado pelo navegador
       // Safari/iOS não suporta webm, então usa mp4
       let mimeType = "audio/webm;codecs=opus";
-      let fileExtension = "webm";
 
       if (!MediaRecorder.isTypeSupported(mimeType)) {
         // Tenta outros formatos em ordem de preferência
@@ -55,7 +54,6 @@ export function useVoiceRecorder(): UseVoiceRecorderReturn {
         for (const format of formats) {
           if (MediaRecorder.isTypeSupported(format)) {
             mimeType = format;
-            fileExtension = format.split("/")[1].split(";")[0];
             console.log("Usando formato de áudio:", mimeType);
             break;
           }
