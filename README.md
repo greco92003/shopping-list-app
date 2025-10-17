@@ -73,8 +73,8 @@ Edite o arquivo `.env.local` e adicione suas credenciais:
 VITE_SUPABASE_URL=sua_url_do_supabase
 VITE_SUPABASE_ANON_KEY=sua_chave_anon_do_supabase
 
-# OpenAI
-VITE_OPENAI_API_KEY=sua_chave_da_openai
+# OpenAI (SEM prefixo VITE_ - usado pela Netlify Function)
+OPENAI_API_KEY=sua_chave_da_openai
 ```
 
 ### 6. Execute o projeto
@@ -124,19 +124,69 @@ A funcionalidade de voz utiliza duas APIs da OpenAI:
 
 ## 🔒 Segurança
 
-⚠️ **Importante**: Este projeto usa `dangerouslyAllowBrowser: true` para permitir chamadas à OpenAI diretamente do navegador. Isso é adequado para:
+✅ **Implementado**: Este projeto usa **Netlify Functions** para proteger a API key da OpenAI:
 
-- Desenvolvimento local
-- Projetos pessoais
-- Protótipos
+- A chave da OpenAI **nunca é exposta** no frontend
+- Todas as chamadas à OpenAI são feitas pelo **backend** (Netlify Function)
+- A API key fica **segura** como variável de ambiente secreta no Netlify
+- Adequado para **produção**
 
-Para produção, recomenda-se:
+## 🚀 Deploy no Netlify
 
-- Criar um backend intermediário
-- Não expor a API key da OpenAI no cliente
-- Implementar rate limiting e autenticação
+### 1. Faça o deploy do projeto
 
-## 📱 Build para produção
+Conecte seu repositório ao Netlify ou use o Netlify CLI:
+
+```bash
+npm install -g netlify-cli
+netlify deploy --prod
+```
+
+### 2. Configure as variáveis de ambiente no Netlify
+
+Acesse: **Site settings → Environment variables**
+
+Adicione as seguintes variáveis:
+
+**Variáveis Públicas (para o frontend):**
+
+```
+Key: VITE_SUPABASE_URL
+Value: sua_url_do_supabase
+Secret: ❌ NÃO marcar
+Scopes: ✅ Builds
+```
+
+```
+Key: VITE_SUPABASE_ANON_KEY
+Value: sua_chave_anon_do_supabase
+Secret: ❌ NÃO marcar
+Scopes: ✅ Builds
+```
+
+**Variável Secreta (para a Netlify Function):**
+
+```
+Key: OPENAI_API_KEY
+Value: sua_chave_da_openai
+Secret: ✅ MARCAR como Secret
+Scopes: ✅ Functions e ✅ Builds
+```
+
+⚠️ **IMPORTANTE**:
+
+- Use `OPENAI_API_KEY` (SEM o prefixo `VITE_`)
+- Marque como **Secret** para proteger a chave
+- A chave ficará **apenas no backend** e nunca será exposta no navegador
+
+### 3. Faça um novo deploy
+
+Após adicionar as variáveis, faça um novo deploy:
+
+- Vá em **Deploys** → **Trigger deploy** → **Deploy site**
+- Ou faça um novo commit/push no repositório
+
+## 📱 Build para produção local
 
 ```bash
 npm run build
