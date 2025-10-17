@@ -62,11 +62,21 @@ export default function App() {
   const addItem = async () => {
     if (inputValue.trim() !== "") {
       try {
-        const newItem = await addItemToDb({
-          text: capitalizeWords(inputValue),
-          checked: false,
-        });
-        setItems((prevItems) => [...prevItems, newItem]);
+        // Separa itens por vírgula
+        const itemTexts = inputValue
+          .split(",")
+          .map((item) => item.trim())
+          .filter((item) => item.length > 0);
+
+        // Adiciona cada item individualmente
+        for (const itemText of itemTexts) {
+          const newItem = await addItemToDb({
+            text: capitalizeWords(itemText),
+            checked: false,
+          });
+          setItems((prevItems) => [...prevItems, newItem]);
+        }
+
         setInputValue("");
 
         if (inputRef.current) {

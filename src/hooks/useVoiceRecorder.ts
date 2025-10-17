@@ -1,6 +1,6 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback } from "react";
 
-export type RecordingState = 'idle' | 'recording' | 'locked' | 'processing';
+export type RecordingState = "idle" | "recording" | "locked" | "processing";
 
 export interface UseVoiceRecorderReturn {
   recordingState: RecordingState;
@@ -9,11 +9,12 @@ export interface UseVoiceRecorderReturn {
   stopRecording: () => void;
   lockRecording: () => void;
   cancelRecording: () => void;
+  resetRecording: () => void;
   error: string | null;
 }
 
 export function useVoiceRecorder(): UseVoiceRecorderReturn {
-  const [recordingState, setRecordingState] = useState<RecordingState>('idle');
+  const [recordingState, setRecordingState] = useState<RecordingState>("idle");
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -31,7 +32,7 @@ export function useVoiceRecorder(): UseVoiceRecorderReturn {
 
       // Cria o MediaRecorder
       const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: 'audio/webm;codecs=opus',
+        mimeType: "audio/webm;codecs=opus",
       });
 
       mediaRecorderRef.current = mediaRecorder;
@@ -45,51 +46,70 @@ export function useVoiceRecorder(): UseVoiceRecorderReturn {
 
       // Quando a gravação parar, cria o blob final
       mediaRecorder.onstop = () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const audioBlob = new Blob(audioChunksRef.current, {
+          type: "audio/webm",
+        });
         setAudioBlob(audioBlob);
-        
+
         // Para todas as tracks do stream
-        stream.getTracks().forEach(track => track.stop());
-        
-        setRecordingState('processing');
+        stream.getTracks().forEach((track) => track.stop());
+
+        setRecordingState("processing");
       };
 
       // Inicia a gravação
       mediaRecorder.start();
-      setRecordingState('recording');
+      setRecordingState("recording");
     } catch (err) {
-      console.error('Erro ao iniciar gravação:', err);
-      
-      if (err instanceof DOMException && err.name === 'NotAllowedError') {
-        setError('Permissão de microfone negada. Por favor, permita o acesso ao microfone.');
+      console.error("Erro ao iniciar gravação:", err);
+
+      if (err instanceof DOMException && err.name === "NotAllowedError") {
+        setError(
+          "Permissão de microfone negada. Por favor, permita o acesso ao microfone."
+        );
       } else {
-        setError('Erro ao acessar o microfone. Verifique se seu dispositivo possui um microfone.');
+        setError(
+          "Erro ao acessar o microfone. Verifique se seu dispositivo possui um microfone."
+        );
       }
-      
-      setRecordingState('idle');
+
+      setRecordingState("idle");
     }
   }, []);
 
   const stopRecording = useCallback(() => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+    if (
+      mediaRecorderRef.current &&
+      mediaRecorderRef.current.state !== "inactive"
+    ) {
       mediaRecorderRef.current.stop();
     }
   }, []);
 
   const lockRecording = useCallback(() => {
-    if (recordingState === 'recording') {
-      setRecordingState('locked');
+    if (recordingState === "recording") {
+      setRecordingState("locked");
     }
   }, [recordingState]);
 
   const cancelRecording = useCallback(() => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+    if (
+      mediaRecorderRef.current &&
+      mediaRecorderRef.current.state !== "inactive"
+    ) {
       mediaRecorderRef.current.stop();
     }
-    
+
     audioChunksRef.current = [];
     setAudioBlob(null);
-    setRecordingState('idle');
+    setRecordingState("idle");
+  }, []);
+
+  const resetRecording = useCallback(() => {
+    audioChunksRef.current = [];
+    setAudioBlob(null);
+    setRecordingState("idle");
+    setError(null);
   }, []);
 
   return {
@@ -99,7 +119,7 @@ export function useVoiceRecorder(): UseVoiceRecorderReturn {
     stopRecording,
     lockRecording,
     cancelRecording,
+    resetRecording,
     error,
   };
 }
-
