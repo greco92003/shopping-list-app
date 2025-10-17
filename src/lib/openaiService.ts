@@ -11,6 +11,8 @@ export async function processVoiceToItems(
   audioBlob: Blob
 ): Promise<VoiceTranscriptionResult> {
   try {
+    console.log("🔄 Convertendo áudio para base64...");
+
     // Converte o blob para base64
     const arrayBuffer = await audioBlob.arrayBuffer();
     const base64Audio = btoa(
@@ -19,6 +21,12 @@ export async function processVoiceToItems(
         ""
       )
     );
+
+    console.log("📤 Enviando para Netlify Function...", {
+      size: audioBlob.size,
+      type: audioBlob.type,
+      base64Length: base64Audio.length,
+    });
 
     // Chama a Netlify Function
     const response = await fetch("/.netlify/functions/transcribe-audio", {
@@ -32,20 +40,54 @@ export async function processVoiceToItems(
       }),
     });
 
+    console.log("📥 Resposta recebida:", {
+      status: response.status,
+      statusText: response.statusText,
+      ok: response.ok,
+    });
+
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || "Erro ao processar áudio");
+      const errorText = await response.text();
+      console.error("❌ Erro da Netlify Function:", errorText);
+
+      let errorData;
+      try {
+        errorData = JSON.parse(errorText);
+      } catch {
+        errorData = { error: errorText };
+      }
+
+      throw new Error(
+        errorData.error ||
+          `Erro HTTP ${response.status}: ${response.statusText}`
+      );
     }
 
     const result: VoiceTranscriptionResult = await response.json();
+    console.log("✅ Transcrição recebida da Netlify Function:", result);
     return result;
   } catch (error) {
-    console.error("Erro ao processar áudio:", error);
-    throw new Error(
-      error instanceof Error
-        ? error.message
-        : "Falha ao processar o áudio. Tente novamente."
-    );
+    console.error("❌ Erro ao processar áudio:", error);
+
+    // Mensagem de erro mais detalhada
+    let errorMessage = "Falha ao processar o áudio";
+
+    if (error instanceof Error) {
+      errorMessage = error.message;
+
+      // Erros específicos
+      if (error.message.includes("Failed to fetch")) {
+        errorMessage =
+          "Erro de conexão. Verifique sua internet e tente novamente.";
+      } else if (error.message.includes("NetworkError")) {
+        errorMessage = "Erro de rede. Verifique sua conexão.";
+      } else if (error.message.includes("500")) {
+        errorMessage =
+          "Erro no servidor. A API Key pode não estar configurada.";
+      }
+    }
+
+    throw new Error(errorMessage);
   }
 }
 

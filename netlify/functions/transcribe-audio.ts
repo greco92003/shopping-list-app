@@ -24,22 +24,57 @@ export const handler: Handler = async (
   }
 
   try {
+    console.log("🎤 Netlify Function iniciada");
+
     // Verifica se a API key está configurada
     if (!process.env.OPENAI_API_KEY) {
+      console.error("❌ OpenAI API key não configurada");
       return {
         statusCode: 500,
+        headers: {
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Headers": "Content-Type",
+        },
         body: JSON.stringify({
-          error: "OpenAI API key não configurada no Netlify",
+          error:
+            "OpenAI API key não configurada no Netlify. Configure a variável OPENAI_API_KEY.",
         }),
       };
     }
 
-    // Parse do body (base64 encoded audio)
-    const { audioData, mimeType } = JSON.parse(event.body || "{}");
+    console.log("✅ OpenAI API key encontrada");
 
-    if (!audioData) {
+    // Parse do body (base64 encoded audio)
+    if (!event.body) {
+      console.error("❌ Body vazio");
       return {
         statusCode: 400,
+        headers: {
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Headers": "Content-Type",
+        },
+        body: JSON.stringify({ error: "Request body is required" }),
+      };
+    }
+
+    const { audioData, mimeType } = JSON.parse(event.body);
+    console.log("📦 Dados recebidos:", {
+      hasAudioData: !!audioData,
+      audioDataLength: audioData?.length || 0,
+      mimeType: mimeType || "não especificado",
+    });
+
+    if (!audioData) {
+      console.error("❌ audioData não fornecido");
+      return {
+        statusCode: 400,
+        headers: {
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Headers": "Content-Type",
+        },
         body: JSON.stringify({ error: "Audio data is required" }),
       };
     }
@@ -183,12 +218,33 @@ Maçã`,
       body: JSON.stringify(result),
     };
   } catch (error) {
-    console.error("Erro na function:", error);
+    console.error("❌ Erro na function:", error);
 
     // Log detalhado do erro
     if (error instanceof Error) {
       console.error("Error message:", error.message);
       console.error("Error stack:", error.stack);
+    }
+
+    // Mensagens de erro mais específicas
+    let errorMessage = "Erro ao processar áudio";
+    let errorDetails = "";
+
+    if (error instanceof Error) {
+      errorDetails = error.message;
+
+      // Erros específicos da OpenAI
+      if (error.message.includes("API key")) {
+        errorMessage = "Erro de autenticação com OpenAI. Verifique a API key.";
+      } else if (error.message.includes("quota")) {
+        errorMessage = "Limite de uso da OpenAI excedido.";
+      } else if (error.message.includes("rate limit")) {
+        errorMessage = "Muitas requisições. Aguarde um momento.";
+      } else if (error.message.includes("timeout")) {
+        errorMessage = "Timeout ao processar áudio. Tente novamente.";
+      } else {
+        errorMessage = `Erro: ${error.message}`;
+      }
     }
 
     return {
@@ -199,8 +255,8 @@ Maçã`,
         "Access-Control-Allow-Headers": "Content-Type",
       },
       body: JSON.stringify({
-        error: "Erro ao processar áudio",
-        details: error instanceof Error ? error.message : "Unknown error",
+        error: errorMessage,
+        details: errorDetails,
       }),
     };
   }
