@@ -69,15 +69,21 @@ export function useVoiceRecorder(): UseVoiceRecorderReturn {
           "audio/webm",
           "audio/ogg;codecs=opus",
           "audio/wav",
+          "", // Formato padrão do navegador
         ];
 
         for (const format of formats) {
-          if (MediaRecorder.isTypeSupported(format)) {
-            mimeType = format;
-            console.log("Usando formato de áudio:", mimeType);
+          if (format === "" || MediaRecorder.isTypeSupported(format)) {
+            mimeType = format || "audio/mp4"; // Fallback para mp4
+            console.log(
+              "🎤 Usando formato de áudio:",
+              mimeType || "padrão do navegador"
+            );
             break;
           }
         }
+      } else {
+        console.log("🎤 Usando formato de áudio:", mimeType);
       }
 
       // Cria o MediaRecorder com o formato detectado

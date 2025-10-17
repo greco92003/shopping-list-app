@@ -16,6 +16,7 @@ import {
 } from "@/lib/shoppingService";
 import { VoiceButton } from "@/components/VoiceButton";
 import { processVoiceToItems, isOpenAIConfigured } from "@/lib/openaiService";
+import { DebugPanel, DebugLog } from "@/components/DebugPanel";
 
 export default function App() {
   const [items, setItems] = useState<ShoppingItem[]>([]);
@@ -24,7 +25,28 @@ export default function App() {
   const [loading, setLoading] = useState<boolean>(true);
   const [processingVoice, setProcessingVoice] = useState<boolean>(false);
   const [voiceError, setVoiceError] = useState<string | null>(null);
+  const [debugLogs, setDebugLogs] = useState<DebugLog[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Função para adicionar log de debug
+  const addDebugLog = (
+    type: DebugLog["type"],
+    message: string,
+    details?: string
+  ) => {
+    const timestamp = new Date().toLocaleTimeString("pt-BR");
+    const log: DebugLog = { timestamp, type, message, details };
+    setDebugLogs((prev) => [...prev, log]);
+    console.log(
+      `[${timestamp}] ${type.toUpperCase()}: ${message}`,
+      details || ""
+    );
+  };
+
+  // Função para limpar logs
+  const clearDebugLogs = () => {
+    setDebugLogs([]);
+  };
 
   // Carrega os itens do Supabase e o darkMode do localStorage
   useEffect(() => {
@@ -97,10 +119,14 @@ export default function App() {
   };
 
   const handleVoiceRecording = async (audioBlob: Blob) => {
+    // Limpa logs anteriores
+    clearDebugLogs();
+
     if (!isOpenAIConfigured()) {
-      setVoiceError(
-        "OpenAI não está configurada. Adicione a chave VITE_OPENAI_API_KEY no arquivo .env.local"
-      );
+      const errorMsg =
+        "OpenAI não está configurada. Adicione a chave VITE_OPENAI_API_KEY no arquivo .env.local";
+      setVoiceError(errorMsg);
+      addDebugLog("error", "OpenAI não configurada", errorMsg);
       setTimeout(() => setVoiceError(null), 5000);
       return;
     }
@@ -109,25 +135,57 @@ export default function App() {
       setProcessingVoice(true);
       setVoiceError(null);
 
-      console.log("Processando áudio de", audioBlob.size, "bytes");
+      // Log 1: Informações do áudio
+      addDebugLog(
+        "info",
+        "Áudio gravado",
+        `Tamanho: ${audioBlob.size} bytes | Tipo: ${audioBlob.type}`
+      );
+
+      // Log 2: Enviando para processamento
+      addDebugLog("info", "Enviando áudio para transcrição...");
+
       const result = await processVoiceToItems(audioBlob);
 
+      // Log 3: Transcrição recebida
+      addDebugLog(
+        "success",
+        "Transcrição recebida",
+        `"${result.transcription}"`
+      );
+
       if (result.items.length === 0) {
-        setVoiceError("Nenhum item foi identificado. Tente novamente.");
+        const errorMsg = "Nenhum item foi identificado. Tente novamente.";
+        setVoiceError(errorMsg);
+        addDebugLog("warning", errorMsg);
         setTimeout(() => setVoiceError(null), 5000);
         return;
       }
 
-      console.log("📝 Transcrição recebida:", result.transcription);
-      console.log("📦 Itens extraídos:", result.items);
+      // Log 4: Itens extraídos
+      addDebugLog(
+        "success",
+        `${result.items.length} itens extraídos`,
+        result.items.join(", ")
+      );
 
-      // 1. Salva a transcrição no Supabase
+      // Log 5: Salvando transcrição
+      addDebugLog("info", "Salvando transcrição no Supabase...");
+
       const savedTranscription = await saveVoiceTranscription({
         transcription: result.transcription,
         items_extracted: result.items,
       });
 
-      console.log("✅ Transcrição salva com ID:", savedTranscription.id);
+      // Log 6: Transcrição salva
+      addDebugLog(
+        "success",
+        "Transcrição salva no Supabase",
+        `ID: ${savedTranscription.id}`
+      );
+
+      // Log 7: Adicionando itens
+      addDebugLog("info", "Adicionando itens à lista...");
 
       // 2. Adiciona cada item à lista, vinculando à transcrição
       for (const itemText of result.items) {
@@ -139,18 +197,26 @@ export default function App() {
         setItems((prevItems) => [...prevItems, newItem]);
       }
 
-      // Mostra feedback de sucesso
-      console.log(
-        `✅ ${result.items.length} item(ns) adicionado(s) e vinculados à transcrição`
+      // Log 8: Sucesso final
+      addDebugLog(
+        "success",
+        "Processo concluído!",
+        `${result.items.length} item(ns) adicionado(s) e vinculados à transcrição`
       );
     } catch (error) {
       console.error("Erro ao processar voz:", error);
 
       // Extrai mensagem de erro mais específica
       let errorMessage = "Erro ao processar áudio";
+      let errorDetails = "";
+
       if (error instanceof Error) {
         errorMessage = error.message;
+        errorDetails = error.stack || "";
       }
+
+      // Log de erro detalhado
+      addDebugLog("error", errorMessage, errorDetails);
 
       setVoiceError(errorMessage);
       setTimeout(() => setVoiceError(null), 5000);
@@ -371,6 +437,13 @@ export default function App() {
           </Button>
         )}
       </div>
+
+      {/* Painel de Debug para iPhone */}
+      <DebugPanel
+        logs={debugLogs}
+        onClear={clearDebugLogs}
+        darkMode={darkMode}
+      />
     </div>
   );
 }
