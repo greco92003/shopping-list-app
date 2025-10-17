@@ -223,6 +223,33 @@ Antes de fazer deploy, confirme:
 
 ---
 
+## 🐛 Solução de Problemas
+
+### Erro 500 ao processar áudio
+
+Se você receber um erro 500 ao tentar gravar áudio, verifique:
+
+1. **API Key configurada?**
+
+   - Vá em **Site settings → Environment variables**
+   - Confirme que `OPENAI_API_KEY` está configurada
+   - Verifique se está marcada como **Secret**
+
+2. **Verifique os logs da Function:**
+
+   - Vá em **Netlify Dashboard → Functions → transcribe-audio → Logs**
+   - Procure por mensagens de erro detalhadas
+   - Erros comuns:
+     - `OpenAI API key não configurada no Netlify` → Configure a variável
+     - `Invalid API key` → Verifique se a chave está correta
+     - `Insufficient quota` → Verifique seu saldo na OpenAI
+
+3. **Faça um novo deploy:**
+   - Após adicionar/corrigir variáveis, sempre faça um novo deploy
+   - As variáveis só são aplicadas em novos deploys
+
+---
+
 ## 🚀 Pronto!
 
 Sua OpenAI API key agora está **100% protegida** e não será exposta no navegador! 🎉

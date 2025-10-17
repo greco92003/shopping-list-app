@@ -1,5 +1,6 @@
-import { Handler, HandlerEvent, HandlerContext } from '@netlify/functions';
-import OpenAI from 'openai';
+import { Handler, HandlerEvent, HandlerContext } from "@netlify/functions";
+import OpenAI from "openai";
+import { toFile } from "openai/uploads";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY, // Variável secreta do Netlify (sem prefixo VITE_)
@@ -15,10 +16,10 @@ export const handler: Handler = async (
   context: HandlerContext
 ) => {
   // Apenas aceita POST
-  if (event.httpMethod !== 'POST') {
+  if (event.httpMethod !== "POST") {
     return {
       statusCode: 405,
-      body: JSON.stringify({ error: 'Method Not Allowed' }),
+      body: JSON.stringify({ error: "Method Not Allowed" }),
     };
   }
 
@@ -28,46 +29,48 @@ export const handler: Handler = async (
       return {
         statusCode: 500,
         body: JSON.stringify({
-          error: 'OpenAI API key não configurada no Netlify',
+          error: "OpenAI API key não configurada no Netlify",
         }),
       };
     }
 
     // Parse do body (base64 encoded audio)
-    const { audioData, mimeType } = JSON.parse(event.body || '{}');
+    const { audioData, mimeType } = JSON.parse(event.body || "{}");
 
     if (!audioData) {
       return {
         statusCode: 400,
-        body: JSON.stringify({ error: 'Audio data is required' }),
+        body: JSON.stringify({ error: "Audio data is required" }),
       };
     }
 
     // Converte base64 para buffer
-    const audioBuffer = Buffer.from(audioData, 'base64');
-    
-    // Cria um File object para a API da OpenAI
-    const audioFile = new File([audioBuffer], 'audio.webm', {
-      type: mimeType || 'audio/webm',
+    const audioBuffer = Buffer.from(audioData, "base64");
+
+    // Usa toFile para criar um objeto File compatível com a OpenAI SDK
+    console.log("Preparando áudio...");
+    console.log("Tamanho do áudio:", audioBuffer.length, "bytes");
+    const audioFile = await toFile(audioBuffer, "audio.webm", {
+      type: mimeType || "audio/webm",
     });
 
     // 1. Transcreve o áudio usando Whisper
-    console.log('Transcrevendo áudio...');
+    console.log("Transcrevendo áudio...");
     const transcription = await openai.audio.transcriptions.create({
       file: audioFile,
-      model: 'whisper-1',
-      language: 'pt',
+      model: "whisper-1",
+      language: "pt",
     });
 
-    console.log('Transcrição:', transcription.text);
+    console.log("Transcrição:", transcription.text);
 
     // 2. Interpreta o texto e extrai itens usando GPT
-    console.log('Interpretando itens...');
+    console.log("Interpretando itens...");
     const completion = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+      model: "gpt-4o-mini",
       messages: [
         {
-          role: 'system',
+          role: "system",
           content: `Você é um assistente que extrai itens de lista de compras de textos em português.
 Regras:
 1. Extraia APENAS itens de compras mencionados
@@ -95,7 +98,7 @@ Saída:
 Maçã`,
         },
         {
-          role: 'user',
+          role: "user",
           content: transcription.text,
         },
       ],
@@ -103,15 +106,15 @@ Maçã`,
       max_tokens: 500,
     });
 
-    const response = completion.choices[0]?.message?.content?.trim() || '';
+    const response = completion.choices[0]?.message?.content?.trim() || "";
 
     // Divide por linhas e remove linhas vazias
     const items = response
-      .split('\n')
+      .split("\n")
       .map((item) => item.trim())
       .filter((item) => item.length > 0);
 
-    console.log('Itens extraídos:', items);
+    console.log("Itens extraídos:", items);
 
     // Retorna o resultado
     const result: TranscribeResponse = {
@@ -122,22 +125,32 @@ Maçã`,
     return {
       statusCode: 200,
       headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*', // Permite CORS
-        'Access-Control-Allow-Headers': 'Content-Type',
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": "*", // Permite CORS
+        "Access-Control-Allow-Headers": "Content-Type",
       },
       body: JSON.stringify(result),
     };
   } catch (error) {
-    console.error('Erro na function:', error);
-    
+    console.error("Erro na function:", error);
+
+    // Log detalhado do erro
+    if (error instanceof Error) {
+      console.error("Error message:", error.message);
+      console.error("Error stack:", error.stack);
+    }
+
     return {
       statusCode: 500,
+      headers: {
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Headers": "Content-Type",
+      },
       body: JSON.stringify({
-        error: 'Erro ao processar áudio',
-        details: error instanceof Error ? error.message : 'Unknown error',
+        error: "Erro ao processar áudio",
+        details: error instanceof Error ? error.message : "Unknown error",
       }),
     };
   }
 };
-
