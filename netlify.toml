@@ -5,8 +5,6 @@
 [functions]
   directory = "netlify/functions"
   node_bundler = "esbuild"
-  # Força uso do Node.js 22 (necessário para OpenAI SDK)
-  node_version = "22"
 
 [[redirects]]
   from = "/*"
