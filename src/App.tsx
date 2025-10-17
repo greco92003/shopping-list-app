@@ -12,6 +12,7 @@ import {
   deleteItem as deleteItemFromDb,
   clearAllItems,
   toggleItemChecked,
+  saveVoiceTranscription,
 } from "@/lib/shoppingService";
 import { VoiceButton } from "@/components/VoiceButton";
 import { processVoiceToItems, isOpenAIConfigured } from "@/lib/openaiService";
@@ -117,21 +118,31 @@ export default function App() {
         return;
       }
 
-      // Adiciona cada item à lista
+      console.log("📝 Transcrição recebida:", result.transcription);
+      console.log("📦 Itens extraídos:", result.items);
+
+      // 1. Salva a transcrição no Supabase
+      const savedTranscription = await saveVoiceTranscription({
+        transcription: result.transcription,
+        items_extracted: result.items,
+      });
+
+      console.log("✅ Transcrição salva com ID:", savedTranscription.id);
+
+      // 2. Adiciona cada item à lista, vinculando à transcrição
       for (const itemText of result.items) {
         const newItem = await addItemToDb({
           text: itemText,
           checked: false,
+          transcription_id: savedTranscription.id,
         });
         setItems((prevItems) => [...prevItems, newItem]);
       }
 
       // Mostra feedback de sucesso
       console.log(
-        `✅ ${result.items.length} item(ns) adicionado(s):`,
-        result.items
+        `✅ ${result.items.length} item(ns) adicionado(s) e vinculados à transcrição`
       );
-      console.log("📝 Transcrição:", result.transcription);
     } catch (error) {
       console.error("Erro ao processar voz:", error);
 

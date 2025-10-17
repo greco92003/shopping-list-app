@@ -19,11 +19,27 @@ export function useVoiceRecorder(): UseVoiceRecorderReturn {
   const [error, setError] = useState<string | null>(null);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const recordingStartTimeRef = useRef<number>(0);
 
+  // Função para limpar o stream e liberar o microfone
+  const cleanupStream = useCallback(() => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => {
+        track.stop();
+        console.log("Track parada:", track.kind, track.label);
+      });
+      streamRef.current = null;
+      console.log("Stream liberado - microfone desligado");
+    }
+  }, []);
+
   const startRecording = useCallback(async () => {
     try {
+      // Limpa qualquer stream anterior
+      cleanupStream();
+
       setError(null);
       setAudioBlob(null);
       audioChunksRef.current = [];
@@ -37,6 +53,10 @@ export function useVoiceRecorder(): UseVoiceRecorderReturn {
           sampleRate: 44100,
         },
       });
+
+      // Armazena referência ao stream
+      streamRef.current = stream;
+      console.log("Stream iniciado - microfone ligado");
 
       // Detecta o melhor formato de áudio suportado pelo navegador
       // Safari/iOS não suporta webm, então usa mp4
@@ -82,7 +102,7 @@ export function useVoiceRecorder(): UseVoiceRecorderReturn {
             "Gravação muito curta. Mantenha pressionado por pelo menos 1 segundo."
           );
           setRecordingState("idle");
-          stream.getTracks().forEach((track) => track.stop());
+          cleanupStream();
           return;
         }
 
@@ -96,7 +116,7 @@ export function useVoiceRecorder(): UseVoiceRecorderReturn {
             "Áudio muito pequeno. Tente falar mais alto ou verificar o microfone."
           );
           setRecordingState("idle");
-          stream.getTracks().forEach((track) => track.stop());
+          cleanupStream();
           return;
         }
 
@@ -111,8 +131,8 @@ export function useVoiceRecorder(): UseVoiceRecorderReturn {
         );
         setAudioBlob(audioBlob);
 
-        // Para todas as tracks do stream
-        stream.getTracks().forEach((track) => track.stop());
+        // Libera o microfone
+        cleanupStream();
 
         setRecordingState("processing");
       };
@@ -122,6 +142,9 @@ export function useVoiceRecorder(): UseVoiceRecorderReturn {
       setRecordingState("recording");
     } catch (err) {
       console.error("Erro ao iniciar gravação:", err);
+
+      // Garante que o stream seja liberado em caso de erro
+      cleanupStream();
 
       if (err instanceof DOMException && err.name === "NotAllowedError") {
         setError(
@@ -135,7 +158,7 @@ export function useVoiceRecorder(): UseVoiceRecorderReturn {
 
       setRecordingState("idle");
     }
-  }, []);
+  }, [cleanupStream]);
 
   const stopRecording = useCallback(() => {
     if (
@@ -160,17 +183,23 @@ export function useVoiceRecorder(): UseVoiceRecorderReturn {
       mediaRecorderRef.current.stop();
     }
 
+    // Libera o microfone
+    cleanupStream();
+
     audioChunksRef.current = [];
     setAudioBlob(null);
     setRecordingState("idle");
-  }, []);
+  }, [cleanupStream]);
 
   const resetRecording = useCallback(() => {
+    // Libera o microfone
+    cleanupStream();
+
     audioChunksRef.current = [];
     setAudioBlob(null);
     setRecordingState("idle");
     setError(null);
-  }, []);
+  }, [cleanupStream]);
 
   return {
     recordingState,
