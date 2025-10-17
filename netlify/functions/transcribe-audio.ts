@@ -1,6 +1,7 @@
 import { Handler, HandlerEvent, HandlerContext } from "@netlify/functions";
 import OpenAI from "openai";
 import { toFile } from "openai/uploads";
+import { Readable } from "stream";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY, // Variável secreta do Netlify (sem prefixo VITE_)
@@ -99,8 +100,8 @@ export const handler: Handler = async (
       };
     }
 
-    // Usa toFile para criar um objeto File compatível com a OpenAI SDK
-    console.log("Preparando áudio...");
+    // Prepara o áudio para envio
+    console.log("📦 Preparando áudio...");
     console.log("Tamanho do áudio:", audioBuffer.length, "bytes");
     console.log("Tipo MIME:", mimeType || "audio/webm");
 
@@ -113,9 +114,26 @@ export const handler: Handler = async (
       else if (mimeType.includes("mp3")) fileExtension = "mp3";
     }
 
-    const audioFile = await toFile(audioBuffer, `audio.${fileExtension}`, {
-      type: mimeType || "audio/webm",
-    });
+    // Cria o arquivo de áudio
+    // Tenta usar toFile (Node 20+), se falhar usa abordagem alternativa
+    let audioFile;
+    try {
+      console.log("🔄 Tentando usar toFile (Node 20+)...");
+      audioFile = await toFile(audioBuffer, `audio.${fileExtension}`, {
+        type: mimeType || "audio/webm",
+      });
+      console.log("✅ toFile funcionou!");
+    } catch (error) {
+      console.log("⚠️ toFile falhou, usando abordagem alternativa...");
+      // Fallback para Node < 20: cria um objeto File-like manualmente
+      const stream = Readable.from(audioBuffer);
+      audioFile = {
+        name: `audio.${fileExtension}`,
+        type: mimeType || "audio/webm",
+        stream: () => stream,
+      } as any;
+      console.log("✅ Abordagem alternativa configurada!");
+    }
 
     // 1. Transcreve o áudio usando Whisper
     console.log("Transcrevendo áudio...");
